@@ -11,11 +11,13 @@
         .calendar-grid { display: grid; grid-template-columns: 80px 1fr; gap: 0; border: 1px solid #ddd; }
         .time-column { background: #f9f9f9; border-right: 1px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 12px; }
         .event-column { position: relative; min-height: 50px; border-bottom: 1px solid #ddd; }
-        .event { position: absolute; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 4px; padding: 8px; font-size: 12px; overflow: hidden; left: 5px; right: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .event { position: absolute; color: white; border-radius: 4px; padding: 8px; font-size: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .event { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .event.event2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
         .event.event3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
         .event.event4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
         .event.event5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .event.event6 { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
         .event-title { font-weight: bold; margin-bottom: 3px; }
         .event-time { font-size: 11px; opacity: 0.9; }
         .loading { text-align: center; padding: 40px; color: #999; }
@@ -60,8 +62,41 @@
             }
         }
 
+        function getOverlapColumn(event, allEvents) {
+            // Find which column this event should be in based on overlaps
+            const eventStart = new Date(event.start.dateTime).getTime();
+            const eventEnd = new Date(event.end.dateTime).getTime();
+            
+            let column = 0;
+            for (let other of allEvents) {
+                if (other === event) break;
+                
+                const otherStart = new Date(other.start.dateTime).getTime();
+                const otherEnd = new Date(other.end.dateTime).getTime();
+                
+                // Check if events overlap
+                if (eventStart < otherEnd && eventEnd > otherStart) {
+                    // They overlap, so this event needs a higher column
+                    const otherColumn = other.column || 0;
+                    column = Math.max(column, otherColumn + 1);
+                }
+            }
+            
+            event.column = column;
+            return column;
+        }
+
         function renderCalendar(events) {
             document.getElementById('loading').style.display = 'none';
+            
+            // Calculate overlap columns for all events
+            events.forEach((event, index) => {
+                getOverlapColumn(event, events.slice(0, index + 1));
+            });
+            
+            // Find max column to determine event widths
+            const maxColumn = Math.max(...events.map(e => e.column || 0), 0);
+            const eventWidth = Math.max(80, 100 / (maxColumn + 1)); // width percentage
             
             // Create hourly grid from 10 AM to 8 PM
             const calendarDiv = document.getElementById('calendar');
@@ -93,16 +128,31 @@
                 calendarDiv.appendChild(row);
             }
             
-            // Add events
+            // Add events with proper column positioning
             events.forEach((event, index) => {
                 const startTime = new Date(event.start.dateTime);
                 const endTime = new Date(event.end.dateTime);
                 const startHour = startTime.getHours();
                 const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
+                const column = event.column || 0;
                 
                 const eventDiv = document.createElement('div');
-                eventDiv.className = `event event${(index % 4) + 1}`;
-                eventDiv.style.cssText = `top: ${(startTime.getMinutes() / 60) * 60}px; height: ${Math.max(duration * 60 - 2, 30)}px; z-index: ${index};`;
+                eventDiv.className = `event event${(index % 5) + 1}`;
+                
+                // Calculate position and width
+                const leftPercent = (column / (maxColumn + 1)) * 100;
+                const widthPercent = (100 / (maxColumn + 1)) - 2; // -2 for margin
+                const topPx = (startTime.getMinutes() / 60) * 60;
+                const heightPx = Math.max(duration * 60 - 2, 30);
+                
+                eventDiv.style.cssText = `
+                    top: ${topPx}px; 
+                    left: ${leftPercent}%; 
+                    width: ${widthPercent}%; 
+                    height: ${heightPx}px; 
+                    z-index: ${column};
+                    padding: 6px;
+                `;
                 
                 const hours = Math.floor(duration);
                 const minutes = Math.round((duration % 1) * 60);
