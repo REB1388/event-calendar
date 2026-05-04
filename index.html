@@ -6,31 +6,29 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
         h1 { text-align: center; margin-bottom: 20px; color: #333; }
         .loading { text-align: center; padding: 40px; color: #999; }
         .error { color: #d32f2f; padding: 20px; background: #ffebee; border-radius: 4px; }
         
-        .calendar { border: 2px solid #333; }
-        .header-row { display: flex; background: #f0f0f0; font-weight: bold; border-bottom: 2px solid #333; }
-        .time-col { width: 80px; padding: 10px; text-align: center; border-right: 1px solid #ddd; }
-        .events-col { flex: 1; padding: 10px; text-align: center; }
+        .calendar-wrapper { display: flex; }
+        .time-column { width: 80px; background: #f9f9f9; border-right: 2px solid #333; }
+        .time-header { background: #f0f0f0; font-weight: bold; padding: 10px; text-align: center; border-bottom: 2px solid #333; height: 40px; }
+        .time-slot { height: 100px; border-bottom: 1px solid #ddd; padding: 5px; text-align: center; font-size: 12px; font-weight: bold; }
         
-        .hour-row { display: flex; border-bottom: 1px solid #ddd; }
-        .hour-time { width: 80px; padding: 10px; text-align: center; background: #f9f9f9; border-right: 1px solid #ddd; font-weight: bold; font-size: 12px; }
-        .hour-events { flex: 1; position: relative; height: 100px; background: #fafafa; }
+        .events-column { flex: 1; position: relative; }
+        .events-header { background: #f0f0f0; font-weight: bold; padding: 10px; text-align: center; border-bottom: 2px solid #333; height: 40px; }
+        .events-track { position: relative; height: 100px; border-bottom: 1px solid #ddd; background: #fafafa; }
         
         .event { 
             position: absolute;
             color: white;
             border-radius: 4px;
-            padding: 8px;
+            padding: 6px;
             font-size: 11px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             border: 1px solid rgba(0,0,0,0.1);
             overflow: hidden;
-            word-wrap: break-word;
-            white-space: normal;
         }
         
         .event1 { background: #667eea; }
@@ -40,13 +38,13 @@
         .event5 { background: #fa709a; }
         .event6 { background: #a8edea; }
         
-        .event-title { font-weight: bold; margin-bottom: 3px; font-size: 12px; }
-        .event-time { font-size: 10px; opacity: 0.95; }
+        .event-title { font-weight: bold; margin-bottom: 2px; font-size: 11px; line-height: 1.2; }
+        .event-time { font-size: 10px; opacity: 0.9; line-height: 1.2; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>June 21st, 2026 - Event Schedule (10 AM - 8 PM)</h1>
+        <h1>June 21st, 2026 - Event Schedule</h1>
         <div id="calendar"></div>
         <div id="loading" class="loading">Loading events...</div>
         <div id="error"></div>
@@ -56,6 +54,7 @@
         const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
         const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
         const TARGET_DATE = '2026-06-21';
+        const PIXELS_PER_MINUTE = 100 / 60; // 100px per hour / 60 minutes
 
         async function loadEvents() {
             try {
@@ -81,465 +80,171 @@
             }
         }
 
-        function calculateEventLanes(events) {
-            // For each event, determine which horizontal lane it should be in
-            events.forEach((event, idx) => {
-                event.lane = 0;
-                const eventStart = new Date(event.start.dateTime).getTime();
-                const eventEnd = new Date(event.end.dateTime).getTime();
-                
-                // Check all previous events for overlaps
-                for (let i = 0; i < idx; i++) {
-                    const otherEvent = events[i];
-                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
-                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
-                    
-                    // If this event overlaps with another, place it to the right
-                    if (eventStart < otherEnd && eventEnd > otherStart) {
-                        event.lane = Math.max(event.lane, (otherEvent.lane || 0) + 1);
-                    }
-                }
-            });
-            
-            return Math.max(...events.map(e => e.lane || 0), 0) + 1;
-        }
-
-        function renderCalendar(events) {
-            document.getElementById('loading').style.display = 'none';
-            
-            const totalLanes = calculateEventLanes(events);
-            const laneWidth = 100 / totalLanes;
-            
-            const calendarDiv = document.getElementById('calendar');
-            calendarDiv.innerHTML = '';
-            
-            const calendar = document.createElement('div');
-            calendar.className = 'calendar';
-            
-            // Header
-            const header = document.createElement('div');
-            header.className = 'header-row';
-            header.innerHTML = '<div class="time-col">Time</div><div class="events-col">Events</div>';
-            calendar.appendChild(header);
-            
-            // Hours 10 AM to 8 PM
-            for (let hour = 10; hour < 20; hour++) {
-                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
-                
-                const row = document.createElement('div');
-                row.className = 'hour-row';
-                
-                const timeCell = document.createElement('div');
-                timeCell.className = 'hour-time';
-                timeCell.textContent = timeStr;
-                
-                const eventsCell = document.createElement('div');
-                eventsCell.className = 'hour-events';
-                eventsCell.id = `hour-${hour}`;
-                
-                row.appendChild(timeCell);
-                row.appendChild(eventsCell);
-                calendar.appendChild(row);
-            }
-            
-            calendarDiv.appendChild(calendar);
-            
-            // Place events
-            events.forEach((event, idx) => {
-                const startTime = new Date(event.start.dateTime);
-                const endTime = new Date(event.end.dateTime);
-                const startHour = startTime.getHours();
-                const startMin = startTime.getMinutes();
-                
-                const durationMs = endTime - startTime;
-                const durationHours = durationMs / (1000 * 60 * 60);
-                
-                const eventEl = document.createElement('div');
-                eventEl.className = `event event${(idx % 6) + 1}`;
-                
-                // Position within hour
-                const topPx = (startMin / 60) * 100; // percentage of hour
-                const heightPx = Math.max(durationHours * 100 - 2, 40); // percentage of hour
-                
-                // Position in lane (left to right)
-                const lane = event.lane || 0;
-                const leftPercent = (lane * laneWidth) + 1;
-                const widthPercent = laneWidth - 2;
-                
-                eventEl.style.top = topPx + '%';
-                eventEl.style.left = leftPercent + '%';
-                eventEl.style.width = widthPercent + '%';
-                eventEl.style.minHeight = heightPx + '%';
-                
-                const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
-                const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-                
-                eventEl.innerHTML = `
-                    <div class="event-title">${event.summary}</div>
-                    <div class="event-time">${startStr} - ${endStr}</div>
-                `;
-                
-                const container = document.getElementById(`hour-${startHour}`);
-                if (container) {
-                    container.appendChild(eventEl);
-                }
-            });
-        }
-
-        loadEvents();
-    </script>
-</body>
-</html>                const timeMax = TARGET_DATE + 'T20:00:00Z';
-                
-                const url = `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&key=${API_KEY}`;
-                
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error.message);
-                }
-                
-                const events = data.items || [];
-                renderCalendar(events);
-                
-            } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').innerHTML = `<strong>Error loading calendar:</strong> ${error.message}`;
-                console.error('Error:', error);
-            }
-        }
-
-        function calculateEventLanes(events) {
-            // For each event, determine which horizontal lane it should be in
-            events.forEach((event, idx) => {
-                event.lane = 0;
-                const eventStart = new Date(event.start.dateTime).getTime();
-                const eventEnd = new Date(event.end.dateTime).getTime();
-                
-                // Check all previous events for overlaps
-                for (let i = 0; i < idx; i++) {
-                    const otherEvent = events[i];
-                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
-                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
-                    
-                    // If this event overlaps with another, place it to the right
-                    if (eventStart < otherEnd && eventEnd > otherStart) {
-                        event.lane = Math.max(event.lane, (otherEvent.lane || 0) + 1);
-                    }
-                }
-            });
-            
-            return Math.max(...events.map(e => e.lane || 0), 0) + 1;
-        }
-
-        function renderCalendar(events) {
-            document.getElementById('loading').style.display = 'none';
-            
-            const totalLanes = calculateEventLanes(events);
-            const laneWidth = 100 / totalLanes;
-            
-            const calendarDiv = document.getElementById('calendar');
-            calendarDiv.innerHTML = '';
-            
-            const calendar = document.createElement('div');
-            calendar.className = 'calendar';
-            
-            // Header
-            const header = document.createElement('div');
-            header.className = 'header-row';
-            header.innerHTML = '<div class="time-col">Time</div><div class="events-col">Events</div>';
-            calendar.appendChild(header);
-            
-            // Hours 10 AM to 8 PM
-            for (let hour = 10; hour < 20; hour++) {
-                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
-                
-                const row = document.createElement('div');
-                row.className = 'hour-row';
-                
-                const timeCell = document.createElement('div');
-                timeCell.className = 'hour-time';
-                timeCell.textContent = timeStr;
-                
-                const eventsCell = document.createElement('div');
-                eventsCell.className = 'hour-events';
-                eventsCell.id = `hour-${hour}`;
-                
-                row.appendChild(timeCell);
-                row.appendChild(eventsCell);
-                calendar.appendChild(row);
-            }
-            
-            calendarDiv.appendChild(calendar);
-            
-            // Place events
-            events.forEach((event, idx) => {
-                const startTime = new Date(event.start.dateTime);
-                const endTime = new Date(event.end.dateTime);
-                const startHour = startTime.getHours();
-                const startMin = startTime.getMinutes();
-                
-                const durationMs = endTime - startTime;
-                const durationHours = durationMs / (1000 * 60 * 60);
-                
-                const eventEl = document.createElement('div');
-                eventEl.className = `event event${(idx % 6) + 1}`;
-                
-                // Position within hour
-                const topPx = (startMin / 60) * 100; // percentage of hour
-                const heightPx = Math.max(durationHours * 100 - 2, 40); // percentage of hour
-                
-                // Position in lane (left to right)
-                const lane = event.lane || 0;
-                const leftPercent = (lane * laneWidth) + 1;
-                const widthPercent = laneWidth - 2;
-                
-                eventEl.style.top = topPx + '%';
-                eventEl.style.left = leftPercent + '%';
-                eventEl.style.width = widthPercent + '%';
-                eventEl.style.minHeight = heightPx + '%';
-                
-                const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
-                const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-                
-                eventEl.innerHTML = `
-                    <div class="event-title">${event.summary}</div>
-                    <div class="event-time">${startStr} - ${endStr}</div>
-                `;
-                
-                const container = document.getElementById(`hour-${startHour}`);
-                if (container) {
-                    container.appendChild(eventEl);
-                }
-            });
-        }
-
-        loadEvents();
-    </script>
-</body>
-</html>                    throw new Error(data.error.message);
-                }
-                
-                const events = data.items || [];
-                renderCalendar(events);
-                
-            } catch (error) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').innerHTML = `<strong>Error loading calendar:</strong> ${error.message}`;
-                console.error('Error:', error);
-            }
-        }
-
-        function findOverlappingGroups(events) {
-            // For each event, find all events that overlap with it
-            return events.map((event, idx) => {
-                const eventStart = new Date(event.start.dateTime).getTime();
-                const eventEnd = new Date(event.end.dateTime).getTime();
-                
-                // Find index within its overlap group
-                let column = 0;
-                for (let i = 0; i < idx; i++) {
-                    const otherStart = new Date(events[i].start.dateTime).getTime();
-                    const otherEnd = new Date(events[i].end.dateTime).getTime();
-                    
-                    // Check if overlaps
-                    if (eventStart < otherEnd && eventEnd > otherStart) {
-                        column = Math.max(column, (events[i].layoutColumn || 0) + 1);
-                    }
-                }
-                
-                return { event, column };
-            });
-        }
-
-        function renderCalendar(events) {
-            document.getElementById('loading').style.display = 'none';
-            
-            // Find layout columns for each event
-            const eventLayout = findOverlappingGroups(events);
-            const maxColumns = Math.max(...eventLayout.map(e => e.column), 0) + 1;
-            
-            const calendarDiv = document.getElementById('calendar');
-            calendarDiv.innerHTML = '';
-            
-            // Header
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'display: grid; grid-template-columns: 80px 1fr; gap: 0; background: #f0f0f0; font-weight: bold; border-bottom: 2px solid #333; padding: 0;';
-            headerRow.innerHTML = '<div style="padding: 10px; text-align: center;">Time</div><div style="padding: 10px; text-align: center;">Events</div>';
-            calendarDiv.appendChild(headerRow);
-            
-            // Time slots from 10 AM to 8 PM
-            for (let hour = 10; hour < 20; hour++) {
-                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
-                
-                const row = document.createElement('div');
-                row.className = 'hour-row';
-                
-                const timeCell = document.createElement('div');
-                timeCell.className = 'time-label';
-                timeCell.textContent = timeStr;
-                
-                const eventsCell = document.createElement('div');
-                eventsCell.className = 'events-container';
-                eventsCell.id = `hour-${hour}`;
-                
-                row.appendChild(timeCell);
-                row.appendChild(eventsCell);
-                calendarDiv.appendChild(row);
-            }
-            
-            // Add events to calendar
-            eventLayout.forEach(({ event, column }, index) => {
-                const startTime = new Date(event.start.dateTime);
-                const endTime = new Date(event.end.dateTime);
-                const startHour = startTime.getHours();
-                const startMinute = startTime.getMinutes();
-                const durationMinutes = (endTime - startTime) / (1000 * 60);
-                
-                const eventDiv = document.createElement('div');
-                eventDiv.className = `event color${(index % 6) + 1}`;
-                
-                // Calculate position
-                const containerHeight = 80; // height of hour row in pixels
-                const topOffset = (startMinute / 60) * containerHeight;
-                const heightMultiplier = durationMinutes / 60; // how many hours tall
-                const heightPx = Math.max(heightMultiplier * containerHeight - 3, 35);
-                
-                const columnWidth = 100 / maxColumns;
-                const leftPercent = column * columnWidth + 1;
-                const widthPercent = columnWidth - 2;
-                
-                eventDiv.style.top = topOffset + 'px';
-                eventDiv.style.left = leftPercent + '%';
-                eventDiv.style.width = widthPercent + '%';
-                eventDiv.style.height = heightPx + 'px';
-                eventDiv.style.zIndex = column;
-                
-                const timeStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')} - ${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-                
-                eventDiv.innerHTML = `
-                    <div class="event-title">${event.summary}</div>
-                    <div class="event-time">${timeStr}</div>
-                `;
-                
-                const container = document.getElementById(`hour-${startHour}`);
-                if (container) {
-                    container.appendChild(eventDiv);
-                }
-            });
-        }
-
-        // Load events when page loads
-        loadEvents();
-    </script>
-</body>
-</html>        function getOverlapColumn(event, allEvents) {
-            // Find which column this event should be in based on overlaps
+        function getOverlappingEvents(event, allEvents) {
+            // Find all events that overlap with this event
             const eventStart = new Date(event.start.dateTime).getTime();
             const eventEnd = new Date(event.end.dateTime).getTime();
             
-            let column = 0;
-            for (let other of allEvents) {
-                if (other === event) break;
-                
-                const otherStart = new Date(other.start.dateTime).getTime();
-                const otherEnd = new Date(other.end.dateTime).getTime();
-                
-                // Check if events overlap
-                if (eventStart < otherEnd && eventEnd > otherStart) {
-                    // They overlap, so this event needs a higher column
-                    const otherColumn = other.column || 0;
-                    column = Math.max(column, otherColumn + 1);
-                }
-            }
+            return allEvents.filter(e => {
+                const otherStart = new Date(e.start.dateTime).getTime();
+                const otherEnd = new Date(e.end.dateTime).getTime();
+                return eventStart < otherEnd && eventEnd > otherStart;
+            });
+        }
+
+        function assignLanes(events) {
+            // For each event, assign which horizontal lane it should be in
+            events.forEach(event => {
+                event.lane = 0;
+                event.laneCount = 1;
+            });
             
-            event.column = column;
-            return column;
+            events.forEach((event, idx) => {
+                const eventStart = new Date(event.start.dateTime).getTime();
+                const eventEnd = new Date(event.end.dateTime).getTime();
+                
+                let maxLane = 0;
+                for (let i = 0; i < idx; i++) {
+                    const otherEvent = events[i];
+                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
+                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
+                    
+                    // If overlaps, assign to next lane
+                    if (eventStart < otherEnd && eventEnd > otherStart) {
+                        maxLane = Math.max(maxLane, otherEvent.lane + 1);
+                    }
+                }
+                event.lane = maxLane;
+            });
+            
+            // Update lane counts
+            events.forEach(event => {
+                const overlapping = getOverlappingEvents(event, events);
+                event.laneCount = Math.max(...overlapping.map(e => e.lane), 0) + 1;
+            });
         }
 
         function renderCalendar(events) {
             document.getElementById('loading').style.display = 'none';
             
-            // Calculate overlap columns for all events
-            events.forEach((event, index) => {
-                getOverlapColumn(event, events.slice(0, index + 1));
-            });
+            assignLanes(events);
             
-            // Find max column to determine event widths
-            const maxColumn = Math.max(...events.map(e => e.column || 0), 0);
-            const eventWidth = Math.max(80, 100 / (maxColumn + 1)); // width percentage
-            
-            // Create hourly grid from 10 AM to 8 PM
             const calendarDiv = document.getElementById('calendar');
             calendarDiv.innerHTML = '';
             
-            // Header
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'display: grid; grid-template-columns: 80px 1fr; gap: 0; background: #f0f0f0; font-weight: bold; border-bottom: 2px solid #333;';
-            headerRow.innerHTML = '<div style="padding: 10px; text-align: center;">Time</div><div style="padding: 10px; text-align: center;">Events</div>';
-            calendarDiv.appendChild(headerRow);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'calendar-wrapper';
             
-            // Time slots
+            // Time column
+            const timeCol = document.createElement('div');
+            timeCol.className = 'time-column';
+            
+            const timeHeader = document.createElement('div');
+            timeHeader.className = 'time-header';
+            timeHeader.textContent = 'Time';
+            timeCol.appendChild(timeHeader);
+            
             for (let hour = 10; hour < 20; hour++) {
                 const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
-                
-                const row = document.createElement('div');
-                row.style.cssText = 'display: grid; grid-template-columns: 80px 1fr; gap: 0; border-bottom: 1px solid #ddd; min-height: 60px;';
-                
-                const timeCell = document.createElement('div');
-                timeCell.style.cssText = 'background: #f9f9f9; border-right: 1px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 12px;';
-                timeCell.textContent = timeStr;
-                
-                const eventsCell = document.createElement('div');
-                eventsCell.style.cssText = 'position: relative; padding: 5px;';
-                eventsCell.id = `hour-${hour}`;
-                
-                row.appendChild(timeCell);
-                row.appendChild(eventsCell);
-                calendarDiv.appendChild(row);
+                const timeSlot = document.createElement('div');
+                timeSlot.className = 'time-slot';
+                timeSlot.textContent = timeStr;
+                timeCol.appendChild(timeSlot);
             }
             
-            // Add events with proper column positioning
-            events.forEach((event, index) => {
+            // Events column
+            const eventsCol = document.createElement('div');
+            eventsCol.className = 'events-column';
+            
+            const eventsHeader = document.createElement('div');
+            eventsHeader.className = 'events-header';
+            eventsHeader.textContent = 'Events';
+            eventsCol.appendChild(eventsHeader);
+            
+            // Create empty tracks for each hour
+            const tracks = [];
+            for (let hour = 10; hour < 20; hour++) {
+                const track = document.createElement('div');
+                track.className = 'events-track';
+                track.id = `track-${hour}`;
+                eventsCol.appendChild(track);
+                tracks.push(track);
+            }
+            
+            // Add events to tracks
+            events.forEach((event, idx) => {
                 const startTime = new Date(event.start.dateTime);
                 const endTime = new Date(event.end.dateTime);
                 const startHour = startTime.getHours();
-                const duration = (endTime - startTime) / (1000 * 60 * 60); // hours
-                const column = event.column || 0;
+                const startMin = startTime.getMinutes();
                 
-                const eventDiv = document.createElement('div');
-                eventDiv.className = `event event${(index % 5) + 1}`;
+                const durationMs = endTime - startTime;
+                const durationMinutes = durationMs / (1000 * 60);
+                const durationPx = durationMinutes * (100 / 60); // 100px = 1 hour
                 
-                // Calculate position and width
-                const leftPercent = (column / (maxColumn + 1)) * 100;
-                const widthPercent = (100 / (maxColumn + 1)) - 2; // -2 for margin
-                const topPx = (startTime.getMinutes() / 60) * 60;
-                const heightPx = Math.max(duration * 60 - 2, 30);
+                // Calculate position
+                let topPx = startMin * (100 / 60);
                 
-                eventDiv.style.cssText = `
-                    top: ${topPx}px; 
-                    left: ${leftPercent}%; 
-                    width: ${widthPercent}%; 
-                    height: ${heightPx}px; 
-                    z-index: ${column};
-                    padding: 6px;
-                `;
+                // Adjust if spans multiple hours
+                let currentHour = startHour;
+                let remainingMinutes = durationMinutes;
+                let isFirstHour = true;
                 
-                const hours = Math.floor(duration);
-                const minutes = Math.round((duration % 1) * 60);
-                const timeRange = `${startTime.getHours()}:${String(startTime.getMinutes()).padStart(2, '0')} - ${endTime.getHours()}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-                
-                eventDiv.innerHTML = `<div class="event-title">${event.summary}</div><div class="event-time">${timeRange}</div>`;
-                
-                const container = document.getElementById(`hour-${startHour}`);
-                if (container) {
-                    container.appendChild(eventDiv);
+                while (remainingMinutes > 0 && currentHour < 20) {
+                    const track = document.getElementById(`track-${currentHour}`);
+                    if (track) {
+                        const eventEl = document.createElement('div');
+                        eventEl.className = `event event${(idx % 6) + 1}`;
+                        
+                        // Position in lane
+                        const laneCount = event.laneCount;
+                        const laneWidth = 100 / laneCount;
+                        const leftPercent = event.lane * laneWidth;
+                        
+                        if (isFirstHour) {
+                            const minutesInFirstHour = 60 - startMin;
+                            const heightPx = Math.min(durationPx, minutesInFirstHour * (100 / 60));
+                            
+                            eventEl.style.top = topPx + 'px';
+                            eventEl.style.left = leftPercent + '%';
+                            eventEl.style.width = laneWidth + '%';
+                            eventEl.style.height = heightPx + 'px';
+                            
+                            remainingMinutes -= minutesInFirstHour;
+                            isFirstHour = false;
+                        } else {
+                            const heightPx = Math.min(durationPx, remainingMinutes * (100 / 60));
+                            
+                            eventEl.style.top = '0px';
+                            eventEl.style.left = leftPercent + '%';
+                            eventEl.style.width = laneWidth + '%';
+                            eventEl.style.height = heightPx + 'px';
+                            
+                            remainingMinutes -= 60;
+                        }
+                        
+                        // Only add title/time on first hour block
+                        if (isFirstHour === false && remainingMinutes < 0) {
+                            const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+                            const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                            eventEl.innerHTML = `
+                                <div class="event-title">${event.summary}</div>
+                                <div class="event-time">${startStr} - ${endStr}</div>
+                            `;
+                        }
+                        
+                        track.appendChild(eventEl);
+                    }
+                    currentHour++;
+                    topPx = 0;
                 }
             });
+            
+            wrapper.appendChild(timeCol);
+            wrapper.appendChild(eventsCol);
+            calendarDiv.appendChild(wrapper);
         }
 
-        // Load events when page loads
         loadEvents();
     </script>
 </body>
