@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Event Calendar</title>
+<title>Pro Calendar</title>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,24 +15,24 @@ body {
 }
 
 .container {
-    max-width: 900px;
+    max-width: 950px;
     margin: 0 auto;
     background: white;
     border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     padding: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
 
 h1 {
     text-align: center;
-    margin-bottom: 10px;
     font-size: 18px;
+    margin-bottom: 10px;
 }
 
 /* CALENDAR */
 .calendar {
     border: 1px solid #ddd;
-    border-radius: 6px;
+    border-radius: 8px;
     overflow-y: auto;
     max-height: 75vh;
     position: relative;
@@ -42,11 +42,11 @@ h1 {
 .header-row {
     display: flex;
     background: #eef1f4;
-    font-weight: bold;
-    font-size: 12px;
     position: sticky;
     top: 0;
     z-index: 3;
+    font-size: 12px;
+    font-weight: bold;
 }
 
 .time-col {
@@ -86,10 +86,10 @@ h1 {
 /* EVENTS */
 .event {
     position: absolute;
-    color: #fff;
     border-radius: 6px;
     padding: 6px;
     font-size: 10px;
+    color: white;
     overflow: hidden;
 }
 
@@ -100,16 +100,7 @@ h1 {
 .event5 { background: #f59ab0; }
 .event6 { background: #a8dadc; color:#333; }
 
-.event-title {
-    font-weight: bold;
-    font-size: 11px;
-}
-
-.event-time {
-    font-size: 9px;
-}
-
-/* NOW LINE */
+/* LIVE LINE */
 .now-line {
     position: absolute;
     left: 0;
@@ -142,7 +133,7 @@ h1 {
 <body>
 
 <div class="container">
-    <h1>June 21, 2026 — Schedule</h1>
+    <h1>June 21, 2026 — Pro Schedule</h1>
     <div id="calendar"></div>
     <div id="loading" style="text-align:center;padding:20px;">Loading...</div>
 </div>
@@ -152,6 +143,7 @@ const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
 const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
 const TARGET_DATE = '2026-06-21';
 
+/* TIME */
 function formatTime(date) {
     let h = date.getHours();
     const m = String(date.getMinutes()).padStart(2,'0');
@@ -160,47 +152,71 @@ function formatTime(date) {
     return `${h}:${m} ${ampm}`;
 }
 
-function isOverlapping(e1, e2) {
-    const s1 = new Date(e1.start.dateTime);
-    const e1e = new Date(e1.end.dateTime);
-    const s2 = new Date(e2.start.dateTime);
-    const e2e = new Date(e2.end.dateTime);
-    return s1 < e2e && e1e > s2;
+/* OVERLAP */
+function overlaps(a,b){
+    const s1=new Date(a.start.dateTime), e1=new Date(a.end.dateTime);
+    const s2=new Date(b.start.dateTime), e2=new Date(b.end.dateTime);
+    return s1 < e2 && e1 > s2;
 }
 
-async function loadEvents() {
+/* CLUSTER EVENTS INTO OVERLAP GROUPS */
+function buildClusters(events){
+    const clusters = [];
+
+    for (const event of events) {
+        const start = new Date(event.start.dateTime);
+        const end = new Date(event.end.dateTime);
+        event._start = start;
+        event._end = end;
+        event._duration = end - start;
+
+        let placed = false;
+
+        for (const cluster of clusters) {
+            if (cluster.some(e => overlaps(e, event))) {
+                cluster.push(event);
+                placed = true;
+                break;
+            }
+        }
+
+        if (!placed) clusters.push([event]);
+    }
+
+    return clusters;
+}
+
+async function loadEvents(){
     const url = `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?timeMin=${TARGET_DATE}T10:00:00Z&timeMax=${TARGET_DATE}T20:00:00Z&singleEvents=true&orderBy=startTime&key=${API_KEY}`;
+    
     const res = await fetch(url);
     const data = await res.json();
-    renderCalendar(data.items || []);
+
+    render(data.items || []);
 }
 
-function renderCalendar(events) {
-    document.getElementById('loading').style.display = 'none';
-
-    events.forEach((e,i)=>{
-        e.isOverlap = events.some((other,j)=> i!==j && isOverlapping(e, other));
-    });
+function render(events){
+    document.getElementById('loading').style.display='none';
 
     const cal = document.createElement('div');
-    cal.className = 'calendar';
+    cal.className='calendar';
 
-    const header = document.createElement('div');
-    header.className = 'header-row';
-    header.innerHTML = '<div class="time-col">Time</div><div class="events-col">Events</div>';
+    const header=document.createElement('div');
+    header.className='header-row';
+    header.innerHTML='<div class="time-col">Time</div><div class="events-col">Events</div>';
     cal.appendChild(header);
 
-    for (let h=10; h<20; h++) {
-        const row = document.createElement('div');
-        row.className = 'hour-row';
+    for(let h=10;h<20;h++){
+        const row=document.createElement('div');
+        row.className='hour-row';
 
-        const t = document.createElement('div');
-        t.className = 'hour-time';
-        t.textContent = formatTime(new Date(2026,5,21,h));
+        const t=document.createElement('div');
+        t.className='hour-time';
+        t.textContent=formatTime(new Date(2026,5,21,h));
 
-        const ev = document.createElement('div');
-        ev.className = 'hour-events';
-        ev.id = 'hour-'+h;
+        const ev=document.createElement('div');
+        ev.className='hour-events';
+        ev.id='h'+h;
 
         row.appendChild(t);
         row.appendChild(ev);
@@ -209,93 +225,100 @@ function renderCalendar(events) {
 
     document.getElementById('calendar').appendChild(cal);
 
-    events.forEach((event, idx) => {
-        const start = new Date(event.start.dateTime);
-        const end = new Date(event.end.dateTime);
+    /* BUILD OVERLAP CLUSTERS */
+    const clusters = buildClusters(events);
 
-        const top = (start.getMinutes()/60)*100;
-        const height = ((end-start)/(1000*60*60))*100;
+    clusters.forEach(cluster => {
 
-        const el = document.createElement('div');
-        el.className = `event event${(idx%6)+1}`;
+        /* DOMINANT EVENT = longest duration (tie -> earliest start) */
+        const dominant = cluster
+            .slice()
+            .sort((a,b)=>{
+                if (b._duration !== a._duration) return b._duration - a._duration;
+                return a._start - b._start;
+            })[0];
 
-        if (event.isOverlap) {
-            el.style.left = '50%';
-            el.style.width = '48%';
-        } else {
-            el.style.left = '1%';
-            el.style.width = '48%';
-        }
+        cluster.forEach((event, idx) => {
+            const start = event._start;
+            const end = event._end;
 
-        el.style.top = top + '%';
-        el.style.height = height + '%';
+            const top = (start.getMinutes()/60)*100;
+            const height = ((end-start)/(1000*60*60))*100;
 
-        el.innerHTML = `
-            <div class="event-title">${event.summary}</div>
-            <div class="event-time">${formatTime(start)} - ${formatTime(end)}</div>
-        `;
+            const el=document.createElement('div');
+            el.className='event event'+((idx%6)+1);
 
-        const container = document.getElementById('hour-'+start.getHours());
-        if (container) container.appendChild(el);
+            /* PRO RULE */
+            if(event===dominant){
+                el.style.left='50%';
+                el.style.width='48%';
+            }else{
+                el.style.left='1%';
+                el.style.width='48%';
+            }
+
+            el.style.top=top+'%';
+            el.style.height=height+'%';
+
+            el.innerHTML=`
+                <div style="font-weight:bold">${event.summary}</div>
+                <div>${formatTime(start)} - ${formatTime(end)}</div>
+            `;
+
+            document.getElementById('h'+start.getHours())?.appendChild(el);
+        });
     });
 
     addNowLine();
-    setInterval(addNowLine, 60000);
-
-    setTimeout(autoScrollToNow, 200);
+    setInterval(addNowLine,60000);
+    setTimeout(autoScroll,200);
 }
 
-/* NOW LINE */
-function addNowLine() {
-    const cal = document.querySelector('.calendar');
-    let line = document.getElementById('now-line');
+/* LIVE LINE (ONLY TODAY) */
+function addNowLine(){
+    const cal=document.querySelector('.calendar');
+    let line=document.getElementById('now');
 
-    if (!line) {
-        line = document.createElement('div');
-        line.id = 'now-line';
-        line.className = 'now-line';
+    const now=new Date();
+    if(now.toISOString().split('T')[0]!==TARGET_DATE){
+        if(line) line.style.display='none';
+        return;
+    }
 
-        const label = document.createElement('div');
-        label.className = 'now-label';
-        label.id = 'now-label';
+    if(!line){
+        line=document.createElement('div');
+        line.id='now';
+        line.className='now-line';
+
+        const label=document.createElement('div');
+        label.className='now-label';
+        label.id='nowLabel';
 
         line.appendChild(label);
         cal.appendChild(line);
     }
 
-    const now = new Date();
-    const startHour = 10;
-    const endHour = 20;
+    const minutes=(now.getHours()-10)*60+now.getMinutes();
+    const percent=(minutes/600)*100;
 
-    if (now.getHours() < startHour || now.getHours() >= endHour) {
-        line.style.display = 'none';
-        return;
-    }
-
-    line.style.display = 'block';
-
-    const minutes = (now.getHours()-startHour)*60 + now.getMinutes();
-    const percent = (minutes / ((endHour-startHour)*60)) * 100;
-
-    line.style.top = percent + '%';
-    document.getElementById('now-label').textContent = formatTime(now);
+    line.style.display='block';
+    line.style.top=percent+'%';
+    document.getElementById('nowLabel').textContent=formatTime(now);
 }
 
 /* AUTO SCROLL */
-function autoScrollToNow() {
-    const cal = document.querySelector('.calendar');
-    const line = document.getElementById('now-line');
-    if (!line) return;
+function autoScroll(){
+    const cal=document.querySelector('.calendar');
+    const line=document.getElementById('now');
 
-    const now = new Date();
-    if (now.getHours() < 10 || now.getHours() >= 20) return;
+    if(!cal||!line) return;
 
-    const offsetTop = line.offsetTop;
-    const scrollTarget = offsetTop - (cal.clientHeight / 2);
+    const now=new Date();
+    if(now.toISOString().split('T')[0]!==TARGET_DATE) return;
 
     cal.scrollTo({
-        top: scrollTarget,
-        behavior: 'smooth'
+        top: line.offsetTop - cal.clientHeight/2,
+        behavior:'smooth'
     });
 }
 
