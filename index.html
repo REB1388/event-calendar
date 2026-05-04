@@ -189,6 +189,135 @@
         loadEvents();
     </script>
 </body>
+</html>                const timeMax = TARGET_DATE + 'T20:00:00Z';
+                
+                const url = `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&key=${API_KEY}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+                
+                const events = data.items || [];
+                renderCalendar(events);
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').innerHTML = `<strong>Error loading calendar:</strong> ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+
+        function calculateEventLanes(events) {
+            // For each event, determine which horizontal lane it should be in
+            events.forEach((event, idx) => {
+                event.lane = 0;
+                const eventStart = new Date(event.start.dateTime).getTime();
+                const eventEnd = new Date(event.end.dateTime).getTime();
+                
+                // Check all previous events for overlaps
+                for (let i = 0; i < idx; i++) {
+                    const otherEvent = events[i];
+                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
+                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
+                    
+                    // If this event overlaps with another, place it to the right
+                    if (eventStart < otherEnd && eventEnd > otherStart) {
+                        event.lane = Math.max(event.lane, (otherEvent.lane || 0) + 1);
+                    }
+                }
+            });
+            
+            return Math.max(...events.map(e => e.lane || 0), 0) + 1;
+        }
+
+        function renderCalendar(events) {
+            document.getElementById('loading').style.display = 'none';
+            
+            const totalLanes = calculateEventLanes(events);
+            const laneWidth = 100 / totalLanes;
+            
+            const calendarDiv = document.getElementById('calendar');
+            calendarDiv.innerHTML = '';
+            
+            const calendar = document.createElement('div');
+            calendar.className = 'calendar';
+            
+            // Header
+            const header = document.createElement('div');
+            header.className = 'header-row';
+            header.innerHTML = '<div class="time-col">Time</div><div class="events-col">Events</div>';
+            calendar.appendChild(header);
+            
+            // Hours 10 AM to 8 PM
+            for (let hour = 10; hour < 20; hour++) {
+                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
+                
+                const row = document.createElement('div');
+                row.className = 'hour-row';
+                
+                const timeCell = document.createElement('div');
+                timeCell.className = 'hour-time';
+                timeCell.textContent = timeStr;
+                
+                const eventsCell = document.createElement('div');
+                eventsCell.className = 'hour-events';
+                eventsCell.id = `hour-${hour}`;
+                
+                row.appendChild(timeCell);
+                row.appendChild(eventsCell);
+                calendar.appendChild(row);
+            }
+            
+            calendarDiv.appendChild(calendar);
+            
+            // Place events
+            events.forEach((event, idx) => {
+                const startTime = new Date(event.start.dateTime);
+                const endTime = new Date(event.end.dateTime);
+                const startHour = startTime.getHours();
+                const startMin = startTime.getMinutes();
+                
+                const durationMs = endTime - startTime;
+                const durationHours = durationMs / (1000 * 60 * 60);
+                
+                const eventEl = document.createElement('div');
+                eventEl.className = `event event${(idx % 6) + 1}`;
+                
+                // Position within hour
+                const topPx = (startMin / 60) * 100; // percentage of hour
+                const heightPx = Math.max(durationHours * 100 - 2, 40); // percentage of hour
+                
+                // Position in lane (left to right)
+                const lane = event.lane || 0;
+                const leftPercent = (lane * laneWidth) + 1;
+                const widthPercent = laneWidth - 2;
+                
+                eventEl.style.top = topPx + '%';
+                eventEl.style.left = leftPercent + '%';
+                eventEl.style.width = widthPercent + '%';
+                eventEl.style.minHeight = heightPx + '%';
+                
+                const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+                const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                
+                eventEl.innerHTML = `
+                    <div class="event-title">${event.summary}</div>
+                    <div class="event-time">${startStr} - ${endStr}</div>
+                `;
+                
+                const container = document.getElementById(`hour-${startHour}`);
+                if (container) {
+                    container.appendChild(eventEl);
+                }
+            });
+        }
+
+        loadEvents();
+    </script>
+</body>
 </html>                    throw new Error(data.error.message);
                 }
                 
