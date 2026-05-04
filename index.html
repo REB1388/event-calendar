@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Event Calendar - June 21st</title>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css' rel='stylesheet' />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        #calendar { max-width: 1000px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; }
+        h1 { text-align: center; color: #333; }
+    </style>
+</head>
+<body>
+    <h1>June 21st, 2026 - Event Schedule (10 AM - 8 PM)</h1>
+    <div id='calendar'></div>
+
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/google-calendar.global.min.js'></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'timeGridDay',
+                initialDate: '2026-06-21',
+                googleCalendarApiKey: 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE',
+                events: {
+                    googleCalendarId: '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com'
+                },
+                eventDisplay: 'block',
+                slotMinTime: '10:00:00',
+                slotMaxTime: '20:00:00',
+                height: 'auto',
+                contentHeight: 'auto',
+                headerToolbar: {
+                    left: '',
+                    center: 'title',
+                    right: ''
+                }
+            });
+            calendar.render();
+        });
+    </script>
+</body>
+</html>
