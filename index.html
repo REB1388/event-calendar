@@ -54,7 +54,6 @@
         const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
         const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
         const TARGET_DATE = '2026-06-21';
-        const PIXELS_PER_MINUTE = 100 / 60; // 100px per hour / 60 minutes
 
         async function loadEvents() {
             try {
@@ -80,54 +79,30 @@
             }
         }
 
-        function getOverlappingEvents(event, allEvents) {
-            // Find all events that overlap with this event
-            const eventStart = new Date(event.start.dateTime).getTime();
-            const eventEnd = new Date(event.end.dateTime).getTime();
-            
-            return allEvents.filter(e => {
-                const otherStart = new Date(e.start.dateTime).getTime();
-                const otherEnd = new Date(e.end.dateTime).getTime();
-                return eventStart < otherEnd && eventEnd > otherStart;
-            });
-        }
-
         function assignLanes(events) {
-            // For each event, assign which horizontal lane it should be in
-            events.forEach(event => {
-                event.lane = 0;
-                event.laneCount = 1;
-            });
-            
             events.forEach((event, idx) => {
+                event.lane = 0;
                 const eventStart = new Date(event.start.dateTime).getTime();
                 const eventEnd = new Date(event.end.dateTime).getTime();
                 
-                let maxLane = 0;
                 for (let i = 0; i < idx; i++) {
-                    const otherEvent = events[i];
-                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
-                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
+                    const other = events[i];
+                    const otherStart = new Date(other.start.dateTime).getTime();
+                    const otherEnd = new Date(other.end.dateTime).getTime();
                     
-                    // If overlaps, assign to next lane
                     if (eventStart < otherEnd && eventEnd > otherStart) {
-                        maxLane = Math.max(maxLane, otherEvent.lane + 1);
+                        event.lane = Math.max(event.lane, (other.lane || 0) + 1);
                     }
                 }
-                event.lane = maxLane;
             });
             
-            // Update lane counts
-            events.forEach(event => {
-                const overlapping = getOverlappingEvents(event, events);
-                event.laneCount = Math.max(...overlapping.map(e => e.lane), 0) + 1;
-            });
+            return Math.max(...events.map(e => e.lane || 0), 0) + 1;
         }
 
         function renderCalendar(events) {
             document.getElementById('loading').style.display = 'none';
             
-            assignLanes(events);
+            const totalLanes = assignLanes(events);
             
             const calendarDiv = document.getElementById('calendar');
             calendarDiv.innerHTML = '';
@@ -161,17 +136,14 @@
             eventsHeader.textContent = 'Events';
             eventsCol.appendChild(eventsHeader);
             
-            // Create empty tracks for each hour
-            const tracks = [];
             for (let hour = 10; hour < 20; hour++) {
                 const track = document.createElement('div');
                 track.className = 'events-track';
                 track.id = `track-${hour}`;
                 eventsCol.appendChild(track);
-                tracks.push(track);
             }
             
-            // Add events to tracks
+            // Add events
             events.forEach((event, idx) => {
                 const startTime = new Date(event.start.dateTime);
                 const endTime = new Date(event.end.dateTime);
@@ -180,63 +152,29 @@
                 
                 const durationMs = endTime - startTime;
                 const durationMinutes = durationMs / (1000 * 60);
-                const durationPx = durationMinutes * (100 / 60); // 100px = 1 hour
                 
-                // Calculate position
-                let topPx = startMin * (100 / 60);
+                const lane = event.lane || 0;
+                const laneWidth = 100 / totalLanes;
+                const leftPercent = lane * laneWidth;
                 
-                // Adjust if spans multiple hours
-                let currentHour = startHour;
-                let remainingMinutes = durationMinutes;
-                let isFirstHour = true;
+                const topPx = (startMin / 60) * 100;
+                const heightPx = (durationMinutes / 60) * 100;
                 
-                while (remainingMinutes > 0 && currentHour < 20) {
-                    const track = document.getElementById(`track-${currentHour}`);
-                    if (track) {
-                        const eventEl = document.createElement('div');
-                        eventEl.className = `event event${(idx % 6) + 1}`;
-                        
-                        // Position in lane
-                        const laneCount = event.laneCount;
-                        const laneWidth = 100 / laneCount;
-                        const leftPercent = event.lane * laneWidth;
-                        
-                        if (isFirstHour) {
-                            const minutesInFirstHour = 60 - startMin;
-                            const heightPx = Math.min(durationPx, minutesInFirstHour * (100 / 60));
-                            
-                            eventEl.style.top = topPx + 'px';
-                            eventEl.style.left = leftPercent + '%';
-                            eventEl.style.width = laneWidth + '%';
-                            eventEl.style.height = heightPx + 'px';
-                            
-                            remainingMinutes -= minutesInFirstHour;
-                            isFirstHour = false;
-                        } else {
-                            const heightPx = Math.min(durationPx, remainingMinutes * (100 / 60));
-                            
-                            eventEl.style.top = '0px';
-                            eventEl.style.left = leftPercent + '%';
-                            eventEl.style.width = laneWidth + '%';
-                            eventEl.style.height = heightPx + 'px';
-                            
-                            remainingMinutes -= 60;
-                        }
-                        
-                        // Only add title/time on first hour block
-                        if (isFirstHour === false && remainingMinutes < 0) {
-                            const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
-                            const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
-                            eventEl.innerHTML = `
-                                <div class="event-title">${event.summary}</div>
-                                <div class="event-time">${startStr} - ${endStr}</div>
-                            `;
-                        }
-                        
-                        track.appendChild(eventEl);
-                    }
-                    currentHour++;
-                    topPx = 0;
+                const eventEl = document.createElement('div');
+                eventEl.className = `event event${(idx % 6) + 1}`;
+                eventEl.style.top = topPx + 'px';
+                eventEl.style.left = leftPercent + '%';
+                eventEl.style.width = (laneWidth - 1) + '%';
+                eventEl.style.minHeight = heightPx + 'px';
+                
+                const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+                const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                
+                eventEl.innerHTML = `<div class="event-title">${event.summary}</div><div class="event-time">${startStr} - ${endStr}</div>`;
+                
+                const track = document.getElementById(`track-${startHour}`);
+                if (track) {
+                    track.appendChild(eventEl);
                 }
             });
             
