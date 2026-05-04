@@ -8,20 +8,31 @@
         body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
         h1 { text-align: center; margin-bottom: 20px; color: #333; }
-        .calendar-grid { display: grid; grid-template-columns: 80px 1fr; gap: 0; border: 1px solid #ddd; }
-        .time-column { background: #f9f9f9; border-right: 1px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 12px; }
-        .event-column { position: relative; min-height: 50px; border-bottom: 1px solid #ddd; }
-        .event { position: absolute; color: white; border-radius: 4px; padding: 8px; font-size: 12px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .event { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .event.event2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .event.event3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .event.event4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .event.event5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-        .event.event6 { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
-        .event-title { font-weight: bold; margin-bottom: 3px; }
-        .event-time { font-size: 11px; opacity: 0.9; }
         .loading { text-align: center; padding: 40px; color: #999; }
         .error { color: #d32f2f; padding: 20px; background: #ffebee; border-radius: 4px; }
+        .hour-row { display: grid; grid-template-columns: 80px 1fr; gap: 0; border-bottom: 1px solid #ddd; min-height: 80px; }
+        .time-label { background: #f9f9f9; border-right: 1px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 12px; }
+        .events-container { position: relative; padding: 5px; }
+        .event { 
+            position: absolute; 
+            color: white; 
+            border-radius: 4px; 
+            padding: 8px; 
+            font-size: 11px; 
+            overflow: hidden; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        .event { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .event.color2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .event.color3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .event.color4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .event.color5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .event.color6 { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
+        .event-title { font-weight: bold; margin-bottom: 2px; }
+        .event-time { font-size: 10px; opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -62,7 +73,110 @@
             }
         }
 
-        function getOverlapColumn(event, allEvents) {
+        function findOverlappingGroups(events) {
+            // For each event, find all events that overlap with it
+            return events.map((event, idx) => {
+                const eventStart = new Date(event.start.dateTime).getTime();
+                const eventEnd = new Date(event.end.dateTime).getTime();
+                
+                // Find index within its overlap group
+                let column = 0;
+                for (let i = 0; i < idx; i++) {
+                    const otherStart = new Date(events[i].start.dateTime).getTime();
+                    const otherEnd = new Date(events[i].end.dateTime).getTime();
+                    
+                    // Check if overlaps
+                    if (eventStart < otherEnd && eventEnd > otherStart) {
+                        column = Math.max(column, (events[i].layoutColumn || 0) + 1);
+                    }
+                }
+                
+                return { event, column };
+            });
+        }
+
+        function renderCalendar(events) {
+            document.getElementById('loading').style.display = 'none';
+            
+            // Find layout columns for each event
+            const eventLayout = findOverlappingGroups(events);
+            const maxColumns = Math.max(...eventLayout.map(e => e.column), 0) + 1;
+            
+            const calendarDiv = document.getElementById('calendar');
+            calendarDiv.innerHTML = '';
+            
+            // Header
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = 'display: grid; grid-template-columns: 80px 1fr; gap: 0; background: #f0f0f0; font-weight: bold; border-bottom: 2px solid #333; padding: 0;';
+            headerRow.innerHTML = '<div style="padding: 10px; text-align: center;">Time</div><div style="padding: 10px; text-align: center;">Events</div>';
+            calendarDiv.appendChild(headerRow);
+            
+            // Time slots from 10 AM to 8 PM
+            for (let hour = 10; hour < 20; hour++) {
+                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
+                
+                const row = document.createElement('div');
+                row.className = 'hour-row';
+                
+                const timeCell = document.createElement('div');
+                timeCell.className = 'time-label';
+                timeCell.textContent = timeStr;
+                
+                const eventsCell = document.createElement('div');
+                eventsCell.className = 'events-container';
+                eventsCell.id = `hour-${hour}`;
+                
+                row.appendChild(timeCell);
+                row.appendChild(eventsCell);
+                calendarDiv.appendChild(row);
+            }
+            
+            // Add events to calendar
+            eventLayout.forEach(({ event, column }, index) => {
+                const startTime = new Date(event.start.dateTime);
+                const endTime = new Date(event.end.dateTime);
+                const startHour = startTime.getHours();
+                const startMinute = startTime.getMinutes();
+                const durationMinutes = (endTime - startTime) / (1000 * 60);
+                
+                const eventDiv = document.createElement('div');
+                eventDiv.className = `event color${(index % 6) + 1}`;
+                
+                // Calculate position
+                const containerHeight = 80; // height of hour row in pixels
+                const topOffset = (startMinute / 60) * containerHeight;
+                const heightMultiplier = durationMinutes / 60; // how many hours tall
+                const heightPx = Math.max(heightMultiplier * containerHeight - 3, 35);
+                
+                const columnWidth = 100 / maxColumns;
+                const leftPercent = column * columnWidth + 1;
+                const widthPercent = columnWidth - 2;
+                
+                eventDiv.style.top = topOffset + 'px';
+                eventDiv.style.left = leftPercent + '%';
+                eventDiv.style.width = widthPercent + '%';
+                eventDiv.style.height = heightPx + 'px';
+                eventDiv.style.zIndex = column;
+                
+                const timeStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')} - ${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                
+                eventDiv.innerHTML = `
+                    <div class="event-title">${event.summary}</div>
+                    <div class="event-time">${timeStr}</div>
+                `;
+                
+                const container = document.getElementById(`hour-${startHour}`);
+                if (container) {
+                    container.appendChild(eventDiv);
+                }
+            });
+        }
+
+        // Load events when page loads
+        loadEvents();
+    </script>
+</body>
+</html>        function getOverlapColumn(event, allEvents) {
             // Find which column this event should be in based on overlaps
             const eventStart = new Date(event.start.dateTime).getTime();
             const eventEnd = new Date(event.end.dateTime).getTime();
