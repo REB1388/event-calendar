@@ -6,33 +6,42 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
         h1 { text-align: center; margin-bottom: 20px; color: #333; }
         .loading { text-align: center; padding: 40px; color: #999; }
         .error { color: #d32f2f; padding: 20px; background: #ffebee; border-radius: 4px; }
-        .hour-row { display: grid; grid-template-columns: 80px 1fr; gap: 0; border-bottom: 1px solid #ddd; min-height: 80px; }
-        .time-label { background: #f9f9f9; border-right: 1px solid #ddd; padding: 10px; text-align: center; font-weight: bold; font-size: 12px; }
-        .events-container { position: relative; padding: 5px; }
+        
+        .calendar { border: 2px solid #333; }
+        .header-row { display: flex; background: #f0f0f0; font-weight: bold; border-bottom: 2px solid #333; }
+        .time-col { width: 80px; padding: 10px; text-align: center; border-right: 1px solid #ddd; }
+        .events-col { flex: 1; padding: 10px; text-align: center; }
+        
+        .hour-row { display: flex; border-bottom: 1px solid #ddd; }
+        .hour-time { width: 80px; padding: 10px; text-align: center; background: #f9f9f9; border-right: 1px solid #ddd; font-weight: bold; font-size: 12px; }
+        .hour-events { flex: 1; position: relative; height: 100px; background: #fafafa; }
+        
         .event { 
-            position: absolute; 
-            color: white; 
-            border-radius: 4px; 
-            padding: 8px; 
-            font-size: 11px; 
-            overflow: hidden; 
+            position: absolute;
+            color: white;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 11px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
+            border: 1px solid rgba(0,0,0,0.1);
+            overflow: hidden;
+            word-wrap: break-word;
+            white-space: normal;
         }
-        .event { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .event.color2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .event.color3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .event.color4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .event.color5 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-        .event.color6 { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
-        .event-title { font-weight: bold; margin-bottom: 2px; }
-        .event-time { font-size: 10px; opacity: 0.9; }
+        
+        .event1 { background: #667eea; }
+        .event2 { background: #f093fb; }
+        .event3 { background: #4facfe; }
+        .event4 { background: #43e97b; }
+        .event5 { background: #fa709a; }
+        .event6 { background: #a8edea; }
+        
+        .event-title { font-weight: bold; margin-bottom: 3px; font-size: 12px; }
+        .event-time { font-size: 10px; opacity: 0.95; }
     </style>
 </head>
 <body>
@@ -44,7 +53,6 @@
     </div>
 
     <script>
-        // Your Google Calendar API Key
         const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
         const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
         const TARGET_DATE = '2026-06-21';
@@ -61,6 +69,127 @@
                 
                 if (data.error) {
                     throw new Error(data.error.message);
+                }
+                
+                const events = data.items || [];
+                renderCalendar(events);
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').innerHTML = `<strong>Error loading calendar:</strong> ${error.message}`;
+                console.error('Error:', error);
+            }
+        }
+
+        function calculateEventLanes(events) {
+            // For each event, determine which horizontal lane it should be in
+            events.forEach((event, idx) => {
+                event.lane = 0;
+                const eventStart = new Date(event.start.dateTime).getTime();
+                const eventEnd = new Date(event.end.dateTime).getTime();
+                
+                // Check all previous events for overlaps
+                for (let i = 0; i < idx; i++) {
+                    const otherEvent = events[i];
+                    const otherStart = new Date(otherEvent.start.dateTime).getTime();
+                    const otherEnd = new Date(otherEvent.end.dateTime).getTime();
+                    
+                    // If this event overlaps with another, place it to the right
+                    if (eventStart < otherEnd && eventEnd > otherStart) {
+                        event.lane = Math.max(event.lane, (otherEvent.lane || 0) + 1);
+                    }
+                }
+            });
+            
+            return Math.max(...events.map(e => e.lane || 0), 0) + 1;
+        }
+
+        function renderCalendar(events) {
+            document.getElementById('loading').style.display = 'none';
+            
+            const totalLanes = calculateEventLanes(events);
+            const laneWidth = 100 / totalLanes;
+            
+            const calendarDiv = document.getElementById('calendar');
+            calendarDiv.innerHTML = '';
+            
+            const calendar = document.createElement('div');
+            calendar.className = 'calendar';
+            
+            // Header
+            const header = document.createElement('div');
+            header.className = 'header-row';
+            header.innerHTML = '<div class="time-col">Time</div><div class="events-col">Events</div>';
+            calendar.appendChild(header);
+            
+            // Hours 10 AM to 8 PM
+            for (let hour = 10; hour < 20; hour++) {
+                const timeStr = (hour < 12 ? hour : hour === 12 ? 12 : hour - 12) + ':00 ' + (hour < 12 ? 'AM' : 'PM');
+                
+                const row = document.createElement('div');
+                row.className = 'hour-row';
+                
+                const timeCell = document.createElement('div');
+                timeCell.className = 'hour-time';
+                timeCell.textContent = timeStr;
+                
+                const eventsCell = document.createElement('div');
+                eventsCell.className = 'hour-events';
+                eventsCell.id = `hour-${hour}`;
+                
+                row.appendChild(timeCell);
+                row.appendChild(eventsCell);
+                calendar.appendChild(row);
+            }
+            
+            calendarDiv.appendChild(calendar);
+            
+            // Place events
+            events.forEach((event, idx) => {
+                const startTime = new Date(event.start.dateTime);
+                const endTime = new Date(event.end.dateTime);
+                const startHour = startTime.getHours();
+                const startMin = startTime.getMinutes();
+                
+                const durationMs = endTime - startTime;
+                const durationHours = durationMs / (1000 * 60 * 60);
+                
+                const eventEl = document.createElement('div');
+                eventEl.className = `event event${(idx % 6) + 1}`;
+                
+                // Position within hour
+                const topPx = (startMin / 60) * 100; // percentage of hour
+                const heightPx = Math.max(durationHours * 100 - 2, 40); // percentage of hour
+                
+                // Position in lane (left to right)
+                const lane = event.lane || 0;
+                const leftPercent = (lane * laneWidth) + 1;
+                const widthPercent = laneWidth - 2;
+                
+                eventEl.style.top = topPx + '%';
+                eventEl.style.left = leftPercent + '%';
+                eventEl.style.width = widthPercent + '%';
+                eventEl.style.minHeight = heightPx + '%';
+                
+                const startStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+                const endStr = `${String(endTime.getHours()).padStart(2, '0')}:${String(endTime.getMinutes()).padStart(2, '0')}`;
+                
+                eventEl.innerHTML = `
+                    <div class="event-title">${event.summary}</div>
+                    <div class="event-time">${startStr} - ${endStr}</div>
+                `;
+                
+                const container = document.getElementById(`hour-${startHour}`);
+                if (container) {
+                    container.appendChild(eventEl);
+                }
+            });
+        }
+
+        loadEvents();
+    </script>
+</body>
+</html>                    throw new Error(data.error.message);
                 }
                 
                 const events = data.items || [];
