@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Purple Calendar Pro</title>
+<title>Make Music Day</title>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,7 +29,7 @@ h1 {
     margin-bottom: 10px;
 }
 
-/* ===== CALENDAR LAYOUT (KEY CHANGE: HORIZONTAL STRUCTURE) ===== */
+/* ===== CALENDAR WRAPPER ===== */
 .calendar-wrapper {
     display: flex;
     border: 1px solid #ddd;
@@ -39,14 +39,14 @@ h1 {
     position: relative;
 }
 
-/* STICKY TIME COLUMN */
+/* TIME COLUMN (STICKY) */
 .time-column {
     min-width: 70px;
     background: #fafafa;
     border-right: 1px solid #ddd;
     position: sticky;
     left: 0;
-    z-index: 10;
+    z-index: 20;
 }
 
 .time-cell {
@@ -54,7 +54,10 @@ h1 {
     font-size: 11px;
     text-align: center;
     padding: 6px;
-    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid transparent; /* IMPORTANT: removes slicing lines */
 }
 
 /* EVENTS AREA */
@@ -63,22 +66,38 @@ h1 {
     position: relative;
 }
 
-/* HOUR ROWS */
+/* HOUR ROWS (NO VISUAL CUTTING) */
 .hour-row {
     position: relative;
     height: 70px;
-    border-bottom: 1px solid #eee;
+    border-bottom: none; /* IMPORTANT FIX: removes line cutting events */
 }
 
-/* EVENTS */
+/* subtle background only */
+.hour-row::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: rgba(0,0,0,0.06);
+    z-index: 1; /* stays behind events */
+}
+
+/* ===== EVENTS (ALWAYS ON TOP) ===== */
 .event {
     position: absolute;
-    border-radius: 6px;
+    border-radius: 7px;
     padding: 6px;
     font-size: 10px;
     color: white;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+
+    /* CRITICAL: ensures no grid lines ever overlap */
+    z-index: 50;
+
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 
     transition:
         top 0.35s ease,
@@ -90,25 +109,39 @@ h1 {
 
 .event:hover {
     transform: scale(1.02);
-    z-index: 20;
+    z-index: 100;
 }
 
-/* 🌸 PURPLE PALETTE (ALL EVENTS) */
-.event:nth-child(6n+1) { background: #7b61ff; }
-.event:nth-child(6n+2) { background: #9b7bff; }
-.event:nth-child(6n+3) { background: #b39dff; }
-.event:nth-child(6n+4) { background: #6f4cff; }
-.event:nth-child(6n+5) { background: #8e7dff; }
-.event:nth-child(6n+6) { background: #a78bfa; }
+/* ===== PURPLE → BLUE GRADIENT SYSTEM (UP TO 20 EVENTS) ===== */
+.event0  { background: #7b2cff; }
+.event1  { background: #6a35ff; }
+.event2  { background: #5b3fff; }
+.event3  { background: #4a4dff; }
+.event4  { background: #3f5cff; }
+.event5  { background: #3a6cff; }
+.event6  { background: #357bff; }
+.event7  { background: #3389ff; }
+.event8  { background: #2f97ff; }
+.event9  { background: #2aa4ff; }
+.event10 { background: #27b1ff; }
+.event11 { background: #23bcff; }
+.event12 { background: #2ac8ff; }
+.event13 { background: #3ad2ff; }
+.event14 { background: #4fdcff; }
+.event15 { background: #6ae4ff; }
+.event16 { background: #86ecff; }
+.event17 { background: #a0f2ff; }
+.event18 { background: #b9f6ff; color:#222; }
+.event19 { background: #d2f9ff; color:#222; }
 
-/* LIVE LINE */
+/* LIVE TIME LINE */
 .now-line {
     position: absolute;
-    left: 70px; /* offset for sticky time column */
+    left: 70px;
     right: 0;
     height: 2px;
     background: #ff3b30;
-    z-index: 20;
+    z-index: 200;
 
     transition: top 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -135,7 +168,7 @@ h1 {
 <body>
 
 <div class="container">
-    <h1>June 21st 2026 Make Music Day</h1>
+    <h1>Make Music Day June 21st 2026</h1>
     <div id="calendar"></div>
     <div id="loading" style="text-align:center;padding:15px;">Loading...</div>
 </div>
@@ -166,7 +199,7 @@ async function fetchEvents(){
     return data.items||[];
 }
 
-/* LANE ASSIGNMENT */
+/* SIMPLE LANE ASSIGNMENT */
 function assignLanes(events){
     const sorted=[...events].sort((a,b)=>
         new Date(a.start.dateTime)-new Date(b.start.dateTime)
@@ -242,7 +275,7 @@ async function render(){
     document.getElementById("calendar").appendChild(wrapper);
 
     /* EVENTS */
-    for(const e of events){
+    events.forEach((e,i)=>{
         const start=new Date(e.start.dateTime);
         const end=new Date(e.end.dateTime);
 
@@ -250,7 +283,9 @@ async function render(){
         const height=((end-start)/3600000)*100;
 
         const el=document.createElement("div");
-        el.className="event";
+
+        /* gradient class cycling (0–19 max) */
+        el.className="event event"+(i%20);
 
         el.style.left=(e.lane*laneWidth)+"%";
         el.style.width=(laneWidth-1)+"%";
@@ -260,10 +295,9 @@ async function render(){
         el.innerHTML=`<b>${e.summary}</b><br>${fmt(start)} - ${fmt(end)}`;
 
         document.getElementById("h"+start.getHours())?.appendChild(el);
-    }
+    });
 
     drawNowLine();
-    autoScroll();
 }
 
 /* LIVE LINE */
@@ -294,24 +328,11 @@ function drawNowLine(){
     document.getElementById("nowLabel").textContent=fmt(now);
 }
 
-/* AUTO SCROLL */
-function autoScroll(){
-    const wrapper=document.querySelector(".calendar-wrapper");
-    const line=document.getElementById("now");
+setInterval(drawNowLine,1000);
 
-    if(!wrapper||!line) return;
-
-    wrapper.scrollTo({
-        top: line.offsetTop - wrapper.clientHeight/2,
-        behavior:"smooth"
-    });
-}
-
-/* AUTO REFRESH */
 async function start(){
     await render();
     setInterval(render,60000);
-    setInterval(drawNowLine,1000);
 }
 
 start();
