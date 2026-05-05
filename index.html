@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>June 21st Make Music Day Schedule</title>
+<title>Smooth Google-Style Calendar</title>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
     font-family: Arial, sans-serif;
-    background: #f4f6f8;
+    background: #f5f7fb;
     padding: 10px;
 }
 
 .container {
     max-width: 950px;
-    margin: 0 auto;
+    margin: auto;
     background: white;
     border-radius: 10px;
     padding: 12px;
@@ -33,8 +33,8 @@ h1 {
 .calendar {
     border: 1px solid #ddd;
     border-radius: 8px;
-    overflow-y: auto;
     max-height: 75vh;
+    overflow-y: auto;
     position: relative;
 }
 
@@ -44,15 +44,15 @@ h1 {
     background: #eef1f4;
     position: sticky;
     top: 0;
-    z-index: 3;
-    font-size: 12px;
+    z-index: 5;
     font-weight: bold;
+    font-size: 12px;
 }
 
 .time-col {
     width: 60px;
-    padding: 6px;
     text-align: center;
+    padding: 6px;
     border-right: 1px solid #ddd;
 }
 
@@ -69,9 +69,9 @@ h1 {
 
 .hour-time {
     width: 60px;
-    padding: 6px;
     font-size: 11px;
     text-align: center;
+    padding: 6px;
     background: #fafafa;
     border-right: 1px solid #eee;
 }
@@ -83,7 +83,7 @@ h1 {
     background: #fcfcfc;
 }
 
-/* EVENTS */
+/* EVENTS (SMOOTH ANIMATION CORE) */
 .event {
     position: absolute;
     border-radius: 6px;
@@ -91,23 +91,41 @@ h1 {
     font-size: 10px;
     color: white;
     overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+
+    /* 🔥 SMOOTH REFLOW */
+    transition:
+        top 0.35s ease,
+        left 0.35s ease,
+        width 0.35s ease,
+        height 0.35s ease,
+        transform 0.2s ease;
 }
 
-.event1 { background: #7b8cff; }
-.event2 { background: #d7a6f5; }
-.event3 { background: #7cc4ff; }
-.event4 { background: #6fd6a8; }
-.event5 { background: #f59ab0; }
-.event6 { background: #a8dadc; color:#333; }
+.event:hover {
+    transform: scale(1.02);
+    z-index: 20;
+}
 
-/* LIVE LINE */
+/* COLORS */
+.event1 { background: #5b8cff; }
+.event2 { background: #c084fc; }
+.event3 { background: #4cc9f0; }
+.event4 { background: #80ed99; color:#222; }
+.event5 { background: #ff7096; }
+.event6 { background: #a8dadc; color:#222; }
+
+/* LIVE LINE (SMOOTHED) */
 .now-line {
     position: absolute;
     left: 0;
     width: 100%;
     height: 2px;
-    background: #ff4d4f;
-    z-index: 5;
+    background: #ff3b30;
+    z-index: 10;
+
+    /* 🔥 SMOOTH MOTION */
+    transition: top 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .now-label {
@@ -115,7 +133,7 @@ h1 {
     top: -10px;
     left: 5px;
     font-size: 10px;
-    background: #ff4d4f;
+    background: #ff3b30;
     color: white;
     padding: 1px 4px;
     border-radius: 3px;
@@ -133,196 +151,176 @@ h1 {
 <body>
 
 <div class="container">
-    <h1>June 21, 2026 Make Music Day</h1>
+    <h1>June 21st 2026 Make Music Day</h1>
     <div id="calendar"></div>
-    <div id="loading" style="text-align:center;padding:20px;">Loading...</div>
+    <div id="loading" style="text-align:center;padding:15px;">Loading...</div>
 </div>
 
 <script>
 const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
 const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
-const TARGET_DATE = '2026-06-21';
+const TARGET_DATE = "2026-06-21";
+
+const START_HOUR = 10;
+const END_HOUR = 20;
+
+let calendarEl;
 
 /* TIME */
-function formatTime(date) {
-    let h = date.getHours();
-    const m = String(date.getMinutes()).padStart(2,'0');
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12 || 12;
-    return `${h}:${m} ${ampm}`;
+function fmt(date){
+    let h=date.getHours();
+    const m=String(date.getMinutes()).padStart(2,'0');
+    const am=h>=12?'PM':'AM';
+    h=h%12||12;
+    return `${h}:${m} ${am}`;
 }
 
-/* OVERLAP */
-function overlaps(a,b){
-    const s1=new Date(a.start.dateTime), e1=new Date(a.end.dateTime);
-    const s2=new Date(b.start.dateTime), e2=new Date(b.end.dateTime);
-    return s1 < e2 && e1 > s2;
+/* FETCH */
+async function fetchEvents(){
+    const url=`https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?timeMin=${TARGET_DATE}T00:00:00Z&timeMax=${TARGET_DATE}T23:59:59Z&singleEvents=true&orderBy=startTime&key=${API_KEY}`;
+    const res=await fetch(url);
+    const data=await res.json();
+    return data.items||[];
 }
 
-/* CLUSTER EVENTS INTO OVERLAP GROUPS */
-function buildClusters(events){
-    const clusters = [];
+/* LANE ASSIGNMENT (GOOGLE STYLE) */
+function assignLanes(events){
+    const sorted=[...events].sort((a,b)=>
+        new Date(a.start.dateTime)-new Date(b.start.dateTime)
+    );
 
-    for (const event of events) {
-        const start = new Date(event.start.dateTime);
-        const end = new Date(event.end.dateTime);
-        event._start = start;
-        event._end = end;
-        event._duration = end - start;
+    const lanes=[];
 
-        let placed = false;
+    for(const e of sorted){
+        const start=new Date(e.start.dateTime);
 
-        for (const cluster of clusters) {
-            if (cluster.some(e => overlaps(e, event))) {
-                cluster.push(event);
-                placed = true;
+        let placed=false;
+
+        for(let i=0;i<lanes.length;i++){
+            const last=lanes[i][lanes[i].length-1];
+            const lastEnd=new Date(last.end.dateTime);
+
+            if(start>=lastEnd){
+                lanes[i].push(e);
+                e.lane=i;
+                placed=true;
                 break;
             }
         }
 
-        if (!placed) clusters.push([event]);
+        if(!placed){
+            e.lane=lanes.length;
+            lanes.push([e]);
+        }
     }
 
-    return clusters;
+    return lanes.length;
 }
 
-async function loadEvents(){
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events?timeMin=${TARGET_DATE}T10:00:00Z&timeMax=${TARGET_DATE}T20:00:00Z&singleEvents=true&orderBy=startTime&key=${API_KEY}`;
-    
-    const res = await fetch(url);
-    const data = await res.json();
+/* RENDER */
+async function render(){
+    document.getElementById("loading").style.display="none";
 
-    render(data.items || []);
-}
+    const events=await fetchEvents();
 
-function render(events){
-    document.getElementById('loading').style.display='none';
+    const laneCount=assignLanes(events);
+    const laneWidth=100/Math.max(laneCount,1);
 
-    const cal = document.createElement('div');
-    cal.className='calendar';
+    if(!calendarEl){
+        calendarEl=document.createElement("div");
+        calendarEl.className="calendar";
+        document.getElementById("calendar").appendChild(calendarEl);
+    }
 
-    const header=document.createElement('div');
-    header.className='header-row';
+    calendarEl.innerHTML="";
+
+    const header=document.createElement("div");
+    header.className="header-row";
     header.innerHTML='<div class="time-col">Time</div><div class="events-col">Events</div>';
-    cal.appendChild(header);
+    calendarEl.appendChild(header);
 
-    for(let h=10;h<20;h++){
-        const row=document.createElement('div');
-        row.className='hour-row';
+    for(let h=START_HOUR;h<END_HOUR;h++){
+        const row=document.createElement("div");
+        row.className="hour-row";
 
-        const t=document.createElement('div');
-        t.className='hour-time';
-        t.textContent=formatTime(new Date(2026,5,21,h));
+        const t=document.createElement("div");
+        t.className="hour-time";
+        t.textContent=fmt(new Date(2026,5,21,h));
 
-        const ev=document.createElement('div');
-        ev.className='hour-events';
-        ev.id='h'+h;
+        const c=document.createElement("div");
+        c.className="hour-events";
+        c.id="h"+h;
 
         row.appendChild(t);
-        row.appendChild(ev);
-        cal.appendChild(row);
+        row.appendChild(c);
+        calendarEl.appendChild(row);
     }
 
-    document.getElementById('calendar').appendChild(cal);
+    /* EVENTS */
+    for(const e of events){
+        const start=new Date(e.start.dateTime);
+        const end=new Date(e.end.dateTime);
 
-    /* BUILD OVERLAP CLUSTERS */
-    const clusters = buildClusters(events);
+        const top=(start.getMinutes()/60)*100;
+        const height=((end-start)/3600000)*100;
 
-    clusters.forEach(cluster => {
+        let el=document.getElementById(e.id);
 
-        /* DOMINANT EVENT = longest duration (tie -> earliest start) */
-        const dominant = cluster
-            .slice()
-            .sort((a,b)=>{
-                if (b._duration !== a._duration) return b._duration - a._duration;
-                return a._start - b._start;
-            })[0];
+        if(!el){
+            el=document.createElement("div");
+            el.className="event event"+(e.lane%6+1);
+            el.id=e.id;
+        }
 
-        cluster.forEach((event, idx) => {
-            const start = event._start;
-            const end = event._end;
+        el.style.left=(e.lane*laneWidth)+"%";
+        el.style.width=(laneWidth-1)+"%";
+        el.style.top=top+"%";
+        el.style.height=height+"%";
 
-            const top = (start.getMinutes()/60)*100;
-            const height = ((end-start)/(1000*60*60))*100;
+        el.innerHTML=`<b>${e.summary}</b><br>${fmt(start)} - ${fmt(end)}`;
 
-            const el=document.createElement('div');
-            el.className='event event'+((idx%6)+1);
+        document.getElementById("h"+start.getHours())?.appendChild(el);
+    }
 
-            /* PRO RULE */
-            if(event===dominant){
-                el.style.left='50%';
-                el.style.width='48%';
-            }else{
-                el.style.left='1%';
-                el.style.width='48%';
-            }
-
-            el.style.top=top+'%';
-            el.style.height=height+'%';
-
-            el.innerHTML=`
-                <div style="font-weight:bold">${event.summary}</div>
-                <div>${formatTime(start)} - ${formatTime(end)}</div>
-            `;
-
-            document.getElementById('h'+start.getHours())?.appendChild(el);
-        });
-    });
-
-    addNowLine();
-    setInterval(addNowLine,60000);
-    setTimeout(autoScroll,200);
+    updateNowLine();
 }
 
-/* LIVE LINE (ONLY TODAY) */
-function addNowLine(){
-    const cal=document.querySelector('.calendar');
-    let line=document.getElementById('now');
-
+/* SMOOTH LIVE LINE */
+function updateNowLine(){
     const now=new Date();
-    if(now.toISOString().split('T')[0]!==TARGET_DATE){
-        if(line) line.style.display='none';
-        return;
-    }
+
+    if(now.toISOString().split("T")[0]!==TARGET_DATE) return;
+
+    let line=document.getElementById("now");
 
     if(!line){
-        line=document.createElement('div');
-        line.id='now';
-        line.className='now-line';
+        line=document.createElement("div");
+        line.id="now";
+        line.className="now-line";
 
-        const label=document.createElement('div');
-        label.className='now-label';
-        label.id='nowLabel';
+        const label=document.createElement("div");
+        label.className="now-label";
+        label.id="nowLabel";
 
         line.appendChild(label);
-        cal.appendChild(line);
+        calendarEl.appendChild(line);
     }
 
-    const minutes=(now.getHours()-10)*60+now.getMinutes();
-    const percent=(minutes/600)*100;
+    const minutes=(now.getHours()-START_HOUR)*60+now.getMinutes();
+    const percent=(minutes/((END_HOUR-START_HOUR)*60))*100;
 
-    line.style.display='block';
-    line.style.top=percent+'%';
-    document.getElementById('nowLabel').textContent=formatTime(now);
+    line.style.top=percent+"%";
+    document.getElementById("nowLabel").textContent=fmt(now);
 }
 
-/* AUTO SCROLL */
-function autoScroll(){
-    const cal=document.querySelector('.calendar');
-    const line=document.getElementById('now');
-
-    if(!cal||!line) return;
-
-    const now=new Date();
-    if(now.toISOString().split('T')[0]!==TARGET_DATE) return;
-
-    cal.scrollTo({
-        top: line.offsetTop - cal.clientHeight/2,
-        behavior:'smooth'
-    });
+/* LIVE SYNC LOOP */
+async function start(){
+    await render();
+    setInterval(render,60000);
+    setInterval(updateNowLine,1000); // smooth motion
 }
 
-loadEvents();
+start();
 </script>
 
 </body>
