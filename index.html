@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smooth Google-Style Calendar</title>
+<title>Purple Calendar Pro</title>
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
     font-family: Arial, sans-serif;
-    background: #f5f7fb;
+    background: #f6f7fb;
     padding: 10px;
 }
 
 .container {
-    max-width: 950px;
+    max-width: 1000px;
     margin: auto;
     background: white;
     border-radius: 10px;
@@ -29,61 +29,48 @@ h1 {
     margin-bottom: 10px;
 }
 
-/* CALENDAR */
-.calendar {
+/* ===== CALENDAR LAYOUT (KEY CHANGE: HORIZONTAL STRUCTURE) ===== */
+.calendar-wrapper {
+    display: flex;
     border: 1px solid #ddd;
     border-radius: 8px;
     max-height: 75vh;
-    overflow-y: auto;
+    overflow: auto;
     position: relative;
 }
 
-/* HEADER */
-.header-row {
-    display: flex;
-    background: #eef1f4;
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    font-weight: bold;
-    font-size: 12px;
-}
-
-.time-col {
-    width: 60px;
-    text-align: center;
-    padding: 6px;
+/* STICKY TIME COLUMN */
+.time-column {
+    min-width: 70px;
+    background: #fafafa;
     border-right: 1px solid #ddd;
+    position: sticky;
+    left: 0;
+    z-index: 10;
 }
 
-.events-col {
-    flex: 1;
-    padding: 6px;
-}
-
-/* ROWS */
-.hour-row {
-    display: flex;
-    border-bottom: 1px solid #eee;
-}
-
-.hour-time {
-    width: 60px;
+.time-cell {
+    height: 70px;
     font-size: 11px;
     text-align: center;
     padding: 6px;
-    background: #fafafa;
-    border-right: 1px solid #eee;
+    border-bottom: 1px solid #eee;
 }
 
-.hour-events {
+/* EVENTS AREA */
+.events-column {
     flex: 1;
     position: relative;
-    height: 70px;
-    background: #fcfcfc;
 }
 
-/* EVENTS (SMOOTH ANIMATION CORE) */
+/* HOUR ROWS */
+.hour-row {
+    position: relative;
+    height: 70px;
+    border-bottom: 1px solid #eee;
+}
+
+/* EVENTS */
 .event {
     position: absolute;
     border-radius: 6px;
@@ -93,7 +80,6 @@ h1 {
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 
-    /* 🔥 SMOOTH REFLOW */
     transition:
         top 0.35s ease,
         left 0.35s ease,
@@ -107,24 +93,23 @@ h1 {
     z-index: 20;
 }
 
-/* COLORS */
-.event1 { background: #5b8cff; }
-.event2 { background: #c084fc; }
-.event3 { background: #4cc9f0; }
-.event4 { background: #80ed99; color:#222; }
-.event5 { background: #ff7096; }
-.event6 { background: #a8dadc; color:#222; }
+/* 🌸 PURPLE PALETTE (ALL EVENTS) */
+.event:nth-child(6n+1) { background: #7b61ff; }
+.event:nth-child(6n+2) { background: #9b7bff; }
+.event:nth-child(6n+3) { background: #b39dff; }
+.event:nth-child(6n+4) { background: #6f4cff; }
+.event:nth-child(6n+5) { background: #8e7dff; }
+.event:nth-child(6n+6) { background: #a78bfa; }
 
-/* LIVE LINE (SMOOTHED) */
+/* LIVE LINE */
 .now-line {
     position: absolute;
-    left: 0;
-    width: 100%;
+    left: 70px; /* offset for sticky time column */
+    right: 0;
     height: 2px;
     background: #ff3b30;
-    z-index: 10;
+    z-index: 20;
 
-    /* 🔥 SMOOTH MOTION */
     transition: top 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -141,9 +126,8 @@ h1 {
 
 /* MOBILE */
 @media (max-width: 600px) {
-    .hour-events { height: 60px; }
+    .time-cell { font-size: 10px; }
     .event { font-size: 9px; padding: 4px; }
-    .time-col, .hour-time { width: 50px; font-size: 10px; }
 }
 </style>
 </head>
@@ -157,6 +141,7 @@ h1 {
 </div>
 
 <script>
+
 const API_KEY = 'AIzaSyCBwA1J8GJnp7KGH7V4C5_XfADcImafJGE';
 const CALENDAR_ID = '8b46b07f4367702d95922677ccb42479bd7397ed22f2b9a36f5c48fcce2be538@group.calendar.google.com';
 const TARGET_DATE = "2026-06-21";
@@ -164,12 +149,10 @@ const TARGET_DATE = "2026-06-21";
 const START_HOUR = 10;
 const END_HOUR = 20;
 
-let calendarEl;
-
-/* TIME */
-function fmt(date){
-    let h=date.getHours();
-    const m=String(date.getMinutes()).padStart(2,'0');
+/* TIME FORMAT */
+function fmt(d){
+    let h=d.getHours();
+    const m=String(d.getMinutes()).padStart(2,'0');
     const am=h>=12?'PM':'AM';
     h=h%12||12;
     return `${h}:${m} ${am}`;
@@ -183,7 +166,7 @@ async function fetchEvents(){
     return data.items||[];
 }
 
-/* LANE ASSIGNMENT (GOOGLE STYLE) */
+/* LANE ASSIGNMENT */
 function assignLanes(events){
     const sorted=[...events].sort((a,b)=>
         new Date(a.start.dateTime)-new Date(b.start.dateTime)
@@ -219,6 +202,7 @@ function assignLanes(events){
 
 /* RENDER */
 async function render(){
+
     document.getElementById("loading").style.display="none";
 
     const events=await fetchEvents();
@@ -226,35 +210,36 @@ async function render(){
     const laneCount=assignLanes(events);
     const laneWidth=100/Math.max(laneCount,1);
 
-    if(!calendarEl){
-        calendarEl=document.createElement("div");
-        calendarEl.className="calendar";
-        document.getElementById("calendar").appendChild(calendarEl);
+    const wrapper=document.createElement("div");
+    wrapper.className="calendar-wrapper";
+
+    /* TIME COLUMN */
+    const timeCol=document.createElement("div");
+    timeCol.className="time-column";
+
+    for(let h=START_HOUR;h<END_HOUR;h++){
+        const cell=document.createElement("div");
+        cell.className="time-cell";
+        cell.textContent=fmt(new Date(2026,5,21,h));
+        timeCol.appendChild(cell);
     }
 
-    calendarEl.innerHTML="";
-
-    const header=document.createElement("div");
-    header.className="header-row";
-    header.innerHTML='<div class="time-col">Time</div><div class="events-col">Events</div>';
-    calendarEl.appendChild(header);
+    /* EVENTS COLUMN */
+    const eventsCol=document.createElement("div");
+    eventsCol.className="events-column";
 
     for(let h=START_HOUR;h<END_HOUR;h++){
         const row=document.createElement("div");
         row.className="hour-row";
-
-        const t=document.createElement("div");
-        t.className="hour-time";
-        t.textContent=fmt(new Date(2026,5,21,h));
-
-        const c=document.createElement("div");
-        c.className="hour-events";
-        c.id="h"+h;
-
-        row.appendChild(t);
-        row.appendChild(c);
-        calendarEl.appendChild(row);
+        row.id="h"+h;
+        eventsCol.appendChild(row);
     }
+
+    wrapper.appendChild(timeCol);
+    wrapper.appendChild(eventsCol);
+
+    document.getElementById("calendar").innerHTML="";
+    document.getElementById("calendar").appendChild(wrapper);
 
     /* EVENTS */
     for(const e of events){
@@ -264,13 +249,8 @@ async function render(){
         const top=(start.getMinutes()/60)*100;
         const height=((end-start)/3600000)*100;
 
-        let el=document.getElementById(e.id);
-
-        if(!el){
-            el=document.createElement("div");
-            el.className="event event"+(e.lane%6+1);
-            el.id=e.id;
-        }
+        const el=document.createElement("div");
+        el.className="event";
 
         el.style.left=(e.lane*laneWidth)+"%";
         el.style.width=(laneWidth-1)+"%";
@@ -282,11 +262,12 @@ async function render(){
         document.getElementById("h"+start.getHours())?.appendChild(el);
     }
 
-    updateNowLine();
+    drawNowLine();
+    autoScroll();
 }
 
-/* SMOOTH LIVE LINE */
-function updateNowLine(){
+/* LIVE LINE */
+function drawNowLine(){
     const now=new Date();
 
     if(now.toISOString().split("T")[0]!==TARGET_DATE) return;
@@ -303,7 +284,7 @@ function updateNowLine(){
         label.id="nowLabel";
 
         line.appendChild(label);
-        calendarEl.appendChild(line);
+        document.querySelector(".calendar-wrapper").appendChild(line);
     }
 
     const minutes=(now.getHours()-START_HOUR)*60+now.getMinutes();
@@ -313,14 +294,28 @@ function updateNowLine(){
     document.getElementById("nowLabel").textContent=fmt(now);
 }
 
-/* LIVE SYNC LOOP */
+/* AUTO SCROLL */
+function autoScroll(){
+    const wrapper=document.querySelector(".calendar-wrapper");
+    const line=document.getElementById("now");
+
+    if(!wrapper||!line) return;
+
+    wrapper.scrollTo({
+        top: line.offsetTop - wrapper.clientHeight/2,
+        behavior:"smooth"
+    });
+}
+
+/* AUTO REFRESH */
 async function start(){
     await render();
     setInterval(render,60000);
-    setInterval(updateNowLine,1000); // smooth motion
+    setInterval(drawNowLine,1000);
 }
 
 start();
+
 </script>
 
 </body>
